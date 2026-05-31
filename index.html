@@ -359,7 +359,7 @@ function renderTopbar() {
           <a onclick="showAppView()">Home</a>
           <a onclick="showProfile()">Account settings</a>
           <div class="divider"></div>
-          <button onclick="signOut()">Sign out</button>
+          <button onclick="signOut();document.getElementById('userDropdown').classList.remove('open')">Sign out</button>
         </div>
       </div>`;
   } else {
