@@ -327,6 +327,8 @@ sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user || null;
   renderTopbar();
   if (currentUser) {
+    await ensureProfile();
+    await loadUserProfile();
     await loadFolders();
     renderFolderSidebar();
   }
@@ -336,13 +338,32 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user || null;
   renderTopbar();
-  if (currentUser) {
+if (currentUser) {
+    await ensureProfile();
     await loadUserProfile();
     await loadFolders();
     renderFolderSidebar();
   }
 }
 init();
+  async function ensureProfile() {
+  if (!currentUser) return;
+  const { data } = await sb.from('profiles').select('id').eq('id', currentUser.id).single();
+  if (!data) {
+    await sb.from('profiles').insert({
+      id: currentUser.id,
+      email: currentUser.email,
+      full_name: currentUser.user_metadata?.full_name || '',
+      searches_used: 0,
+      paid: false
+    });
+  } else if (!data.email) {
+    await sb.from('profiles').update({
+      email: currentUser.email,
+      full_name: currentUser.user_metadata?.full_name || ''
+    }).eq('id', currentUser.id);
+  }
+}
 
 async function loadUserProfile() {
   if (!currentUser) return;
