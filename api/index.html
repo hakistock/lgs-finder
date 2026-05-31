@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LGS Finder — TCG Store Contact Database</title>
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --text: #f0f0f0;
+    --muted: #888;
+    --accent: #c8f135;
+    --accent-dark: #a8d020;
+    --danger: #ff4d4d;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
+  a { color: var(--accent); }
+
+  /* layout */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid var(--border); }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+  .logo span { color: var(--accent); }
+  .trial-badge { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; color: var(--muted); }
+  .trial-badge b { color: var(--accent); }
+
+  .hero { text-align: center; padding: 4rem 2rem 2.5rem; }
+  .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; margin-bottom: 1rem; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 16px; max-width: 480px; margin: 0 auto 2rem; line-height: 1.6; }
+
+  /* search */
+  .search-box { max-width: 600px; margin: 0 auto 2rem; display: flex; gap: 8px; }
+  .search-box input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 16px; height: 48px; color: var(--text); font-size: 15px; outline: none; transition: border-color 0.2s; }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box select { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; height: 48px; color: var(--text); font-size: 14px; outline: none; cursor: pointer; }
+  .btn { height: 48px; padding: 0 24px; border-radius: var(--radius); font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
+  .btn-accent { background: var(--accent); color: #0f0f0f; }
+  .btn-accent:hover { background: var(--accent-dark); }
+  .btn-accent:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* stats */
+  .stats { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
+  .stat { text-align: center; }
+  .stat-val { font-size: 28px; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* main content */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+
+  /* toolbar */
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+  .toolbar input { flex: 1; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 14px; height: 38px; color: var(--text); font-size: 14px; outline: none; }
+  .toolbar input:focus { border-color: var(--accent); }
+  .tag { font-size: 12px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); cursor: pointer; background: transparent; transition: all 0.15s; }
+  .tag.active { background: var(--accent); color: #0f0f0f; border-color: var(--accent); font-weight: 600; }
+  .btn-sm { height: 38px; padding: 0 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* table */
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  thead { background: var(--surface2); }
+  th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  th:nth-child(1) { width: 20%; }
+  th:nth-child(2) { width: 15%; }
+  th:nth-child(3) { width: 14%; }
+  th:nth-child(4) { width: 22%; }
+  th:nth-child(5) { width: 20%; }
+  th:nth-child(6) { width: 9%; }
+  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface); }
+  .store-name { font-weight: 600; }
+  .empty-state { text-align: center; padding: 4rem 1rem; color: var(--muted); font-size: 14px; }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
+
+  /* badges */
+  .badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .badge-wpn { background: #1a3a2a; color: #4ade80; }
+  .badge-indie { background: #1a2a3a; color: #60a5fa; }
+  .badge-chain { background: #2a2a1a; color: #fbbf24; }
+
+  /* progress */
+  .progress-bar { height: 3px; background: var(--surface2); border-radius: 2px; margin-bottom: 1.5rem; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s ease; }
+
+  /* paywall */
+  .paywall-overlay { position: relative; }
+  .paywall-blur { filter: blur(4px); pointer-events: none; user-select: none; }
+  .paywall-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; text-align: center; width: 360px; max-width: 90vw; z-index: 10; box-shadow: 0 0 80px rgba(200, 241, 53, 0.08); }
+  .paywall-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .paywall-card p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; line-height: 1.6; }
+  .price { font-size: 42px; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
+  .price span { font-size: 16px; color: var(--muted); font-weight: 400; }
+  .features { list-style: none; text-align: left; margin: 1.25rem 0 1.5rem; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .features li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
+  .btn-pay { width: 100%; height: 52px; border-radius: var(--radius); background: var(--accent); color: #0f0f0f; font-size: 16px; font-weight: 700; border: none; cursor: pointer; transition: background 0.15s; }
+  .btn-pay:hover { background: var(--accent-dark); }
+  .paywall-note { font-size: 11px; color: var(--muted); margin-top: 10px; }
+
+  /* loading spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0f0f0f; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -3px; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">LGS<span>Finder</span></div>
+  <div class="trial-badge">Free trial: <b id="searchesLeft">3</b> searches left</div>
+</div>
+
+<div class="hero">
+  <h1>Find TCG store owners<br><span>ready to buy your cards</span></h1>
+  <p>Instant contact database of local game store owners and managers — names, emails, phones, and addresses.</p>
+
+  <div class="search-box">
+    <input type="text" id="locationInput" placeholder="City, state or ZIP — e.g. Chicago, IL" />
+    <select id="radiusSelect">
+      <option value="10">10 mi</option>
+      <option value="25" selected>25 mi</option>
+      <option value="50">50 mi</option>
+      <option value="100">100 mi</option>
+    </select>
+    <button class="btn btn-accent" id="searchBtn" onclick="startSearch()">Search</button>
+  </div>
+
+  <div class="stats" id="statsRow" style="display:none">
+    <div class="stat"><div class="stat-val" id="statStores">0</div><div class="stat-label">Stores found</div></div>
+    <div class="stat"><div class="stat-val" id="statEmail">0</div><div class="stat-label">With email</div></div>
+    <div class="stat"><div class="stat-val" id="statPhone">0</div><div class="stat-label">With phone</div></div>
+    <div class="stat"><div class="stat-val" id="statContact">0</div><div class="stat-label">Named contacts</div></div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="progress-bar" id="progressBar" style="display:none">
+    <div class="progress-fill" id="progressFill" style="width:0%"></div>
+  </div>
+
+  <div id="mainContent">
+    <div class="empty-state">
+      <div class="icon">🗺️</div>
+      <div>Enter a location above to find LGS stores in that area</div>
+    </div>
+  </div>
+</div>
+
+<!-- Paywall template (hidden) -->
+<template id="paywallTpl">
+  <div class="paywall-card">
+    <h2>You've used your free searches</h2>
+    <p>Unlock unlimited searches across every city, state, and zip code in the US.</p>
+    <div class="price">$29<span>/month</span></div>
+    <ul class="features">
+      <li>Unlimited location searches</li>
+      <li>Owner & manager names</li>
+      <li>Emails, phones & addresses</li>
+      <li>CSV export</li>
+      <li>WPN store filtering</li>
+    </ul>
+    <button class="btn-pay" onclick="goToCheckout()">Get full access →</button>
+    <div class="paywall-note">Billed monthly. Cancel anytime.</div>
+  </div>
+</template>
+
+<script>
+const MAX_FREE = 3;
+let searches = parseInt(localStorage.getItem('lgs_searches') || '0');
+let allResults = [];
+let activeTag = 'all';
+let paid = localStorage.getItem('lgs_paid') === 'true';
+
+function updateTrialBadge() {
+  const left = Math.max(0, MAX_FREE - searches);
+  document.getElementById('searchesLeft').textContent = paid ? '∞' : left;
+  if (paid) document.querySelector('.trial-badge').innerHTML = '✓ Full access';
+}
+updateTrialBadge();
+
+async function startSearch() {
+  const loc = document.getElementById('locationInput').value.trim();
+  if (!loc) { document.getElementById('locationInput').focus(); return; }
+
+  if (!paid && searches >= MAX_FREE) { showPaywall(); return; }
+
+  const radius = document.getElementById('radiusSelect').value;
+  const btn = document.getElementById('searchBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Searching...';
+
+  showProgress(true);
+  setProgress(15);
+  document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div style="color:#888;font-size:14px">🔍 Searching for stores near ' + loc + '...</div></div>';
+
+  try {
+    setProgress(40);
+    const res = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location: loc, radius })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Search failed');
+
+    setProgress(90);
+    searches++;
+    localStorage.setItem('lgs_searches', searches);
+    updateTrialBadge();
+
+    allResults = [...allResults, ...data.stores];
+    renderAll();
+    setProgress(100);
+    setTimeout(() => showProgress(false), 600);
+  } catch(e) {
+    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div style="color:#ff4d4d">Error: ${e.message}</div></div>`;
+    showProgress(false);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = 'Search';
+}
+
+function renderAll() {
+  const filter = document.querySelector('#filterInput')?.value.toLowerCase() || '';
+  let data = allResults.filter(r => {
+    if (activeTag !== 'all' && r.type !== activeTag) return false;
+    if (filter) return Object.values(r).join(' ').toLowerCase().includes(filter);
+    return true;
+  });
+
+  updateStats(allResults);
+  document.getElementById('statsRow').style.display = 'flex';
+
+  const toolbar = `
+    <div class="toolbar" style="margin-bottom:1rem">
+      <input type="text" id="filterInput" placeholder="Filter results..." oninput="renderAll()" />
+      <button class="tag ${activeTag==='all'?'active':''}" onclick="setTag('all')">All</button>
+      <button class="tag ${activeTag==='wpn'?'active':''}" onclick="setTag('wpn')">WPN</button>
+      <button class="tag ${activeTag==='indie'?'active':''}" onclick="setTag('indie')">Indie</button>
+      <button class="tag ${activeTag==='chain'?'active':''}" onclick="setTag('chain')">Chain</button>
+      <button class="btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-sm" onclick="clearAll()">✕ Clear</button>
+    </div>`;
+
+  const rows = data.map(r => {
+    const badge = r.type === 'wpn' ? '<span class="badge badge-wpn">WPN</span>' :
+                  r.type === 'chain' ? '<span class="badge badge-chain">Chain</span>' :
+                  '<span class="badge badge-indie">Indie</span>';
+    const email = r.email ? `<a href="mailto:${r.email}" style="color:#60a5fa">${r.email}</a>` : '<span style="color:#555">—</span>';
+    return `<tr>
+      <td class="store-name" title="${r.name}">${r.name}</td>
+      <td title="${r.owner}">${r.owner || '<span style="color:#555">—</span>'}</td>
+      <td>${r.phone || '<span style="color:#555">—</span>'}</td>
+      <td title="${r.email}">${email}</td>
+      <td style="color:#888" title="${r.address}">${r.address || '—'}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+
+  const tableHtml = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Store</th><th>Owner/Manager</th><th>Phone</th><th>Email</th><th>Address</th><th>Type</th>
+        </tr></thead>
+        <tbody>${rows.length ? rows : '<tr><td colspan="6" class="empty-state">No stores match your filter</td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  const needsPaywall = !paid && searches >= MAX_FREE;
+  if (needsPaywall) {
+    const tpl = document.getElementById('paywallTpl').content.cloneNode(true);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'paywall-overlay';
+    const blurred = document.createElement('div');
+    blurred.className = 'paywall-blur';
+    blurred.innerHTML = toolbar + tableHtml;
+    wrapper.appendChild(blurred);
+    wrapper.appendChild(tpl);
+    document.getElementById('mainContent').innerHTML = '';
+    document.getElementById('mainContent').appendChild(wrapper);
+  } else {
+    document.getElementById('mainContent').innerHTML = toolbar + tableHtml;
+  }
+}
+
+function setTag(tag) { activeTag = tag; renderAll(); }
+
+function updateStats(data) {
+  document.getElementById('statStores').textContent = data.length;
+  document.getElementById('statEmail').textContent = data.filter(r => r.email).length;
+  document.getElementById('statPhone').textContent = data.filter(r => r.phone).length;
+  document.getElementById('statContact').textContent = data.filter(r => r.owner).length;
+}
+
+function exportCSV() {
+  const headers = ['Store Name','Owner/Manager','Phone','Email','Address','Type'];
+  const rows = allResults.map(r => [r.name,r.owner,r.phone,r.email,r.address,r.type].map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','),...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = 'lgs_contacts.csv'; a.click();
+}
+
+function clearAll() {
+  allResults = [];
+  activeTag = 'all';
+  document.getElementById('statsRow').style.display = 'none';
+  document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="icon">🗺️</div><div>Enter a location above to find LGS stores</div></div>';
+}
+
+function showPaywall() {
+  const tpl = document.getElementById('paywallTpl').content.cloneNode(true);
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100';
+  overlay.appendChild(tpl);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+}
+
+function goToCheckout() {
+  // Replace this URL with your real Stripe payment link
+  window.location.href = 'https://buy.stripe.com/YOUR_STRIPE_LINK_HERE';
+}
+
+function showProgress(show) { document.getElementById('progressBar').style.display = show ? 'block' : 'none'; }
+function setProgress(pct) { document.getElementById('progressFill').style.width = pct + '%'; }
+
+document.getElementById('locationInput').addEventListener('keydown', e => { if(e.key==='Enter') startSearch(); });
+</script>
+</body>
+</html>
