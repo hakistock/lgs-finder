@@ -337,13 +337,13 @@ sb.auth.onAuthStateChange(async (event, session) => {
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user || null;
-  renderTopbar();
-if (currentUser) {
+  if (currentUser) {
     await ensureProfile();
     await loadUserProfile();
     await loadFolders();
     renderFolderSidebar();
   }
+  renderTopbar();
 }
 init();
   async function ensureProfile() {
