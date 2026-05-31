@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>LGS Finder — TCG Store Contact Database</title>
+<title>LGSFinder — Source Sealed Cases Direct</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
     --bg: #0f0f0f;
@@ -14,79 +15,113 @@
     --muted: #888;
     --accent: #c8f135;
     --accent-dark: #a8d020;
-    --danger: #ff4d4d;
     --radius: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; min-height: 100vh; }
-  a { color: var(--accent); }
+  a { color: var(--accent); text-decoration: none; }
 
-  /* layout */
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid var(--border); }
+  /* topbar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 2rem; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 50; }
   .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
   .logo span { color: var(--accent); }
-  .trial-badge { font-size: 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; color: var(--muted); }
-  .trial-badge b { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .user-menu { position: relative; }
+  .user-dropdown { position: absolute; right: 0; top: 40px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); width: 200px; overflow: hidden; z-index: 100; display: none; }
+  .user-dropdown.open { display: block; }
+  .user-dropdown a, .user-dropdown button { display: block; width: 100%; padding: 10px 16px; font-size: 13px; color: var(--text); background: none; border: none; text-align: left; cursor: pointer; }
+  .user-dropdown a:hover, .user-dropdown button:hover { background: var(--surface2); }
+  .user-dropdown .divider { height: 1px; background: var(--border); }
 
-  .hero { text-align: center; padding: 4rem 2rem 2.5rem; }
-  .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; margin-bottom: 1rem; }
-  .hero h1 span { color: var(--accent); }
-  .hero p { color: var(--muted); font-size: 16px; max-width: 480px; margin: 0 auto 2rem; line-height: 1.6; }
-
-  /* search */
-  .search-box { max-width: 600px; margin: 0 auto 2rem; display: flex; gap: 8px; }
-  .search-box input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 16px; height: 48px; color: var(--text); font-size: 15px; outline: none; transition: border-color 0.2s; }
-  .search-box input:focus { border-color: var(--accent); }
-  .search-box select { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; height: 48px; color: var(--text); font-size: 14px; outline: none; cursor: pointer; }
-  .btn { height: 48px; padding: 0 24px; border-radius: var(--radius); font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
+  /* buttons */
+  .btn { height: 40px; padding: 0 20px; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
   .btn-accent { background: var(--accent); color: #0f0f0f; }
   .btn-accent:hover { background: var(--accent-dark); }
   .btn-accent:disabled { opacity: 0.4; cursor: not-allowed; }
   .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
   .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm { height: 34px; padding: 0 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-danger { background: transparent; color: #ff4d4d; border: 1px solid #ff4d4d; }
+  .btn-danger:hover { background: #ff4d4d22; }
+
+  /* auth modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2rem; width: 400px; max-width: 90vw; }
+  .modal h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .modal p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; }
+  .form-group { margin-bottom: 1rem; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-group input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 14px; height: 42px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .form-group input:focus { border-color: var(--accent); }
+  .modal-footer { margin-top: 1rem; text-align: center; font-size: 13px; color: var(--muted); }
+  .modal-footer a { color: var(--accent); cursor: pointer; }
+  .modal-error { background: #ff4d4d22; border: 1px solid #ff4d4d44; border-radius: var(--radius); padding: 10px 14px; font-size: 13px; color: #ff4d4d; margin-bottom: 1rem; display: none; }
+
+  /* hero */
+  .hero { text-align: center; padding: 4rem 2rem 2.5rem; }
+  .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 800; letter-spacing: -1px; line-height: 1.15; margin-bottom: 1rem; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { color: var(--muted); font-size: 16px; max-width: 500px; margin: 0 auto 2rem; line-height: 1.6; }
+  .search-box { max-width: 620px; margin: 0 auto 1rem; display: flex; gap: 8px; }
+  .search-box input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 16px; height: 50px; color: var(--text); font-size: 15px; outline: none; transition: border-color 0.2s; }
+  .search-box input:focus { border-color: var(--accent); }
+  .search-box select { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; height: 50px; color: var(--text); font-size: 14px; outline: none; cursor: pointer; }
+  .search-box .btn { height: 50px; padding: 0 28px; font-size: 15px; }
 
   /* stats */
-  .stats { display: flex; justify-content: center; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 2rem; }
-  .stat { text-align: center; }
+  .stats { display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; margin-bottom: 2rem; }
   .stat-val { font-size: 28px; font-weight: 700; color: var(--accent); }
   .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-  /* main content */
-  .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+  /* main layout */
+  .app-layout { display: grid; grid-template-columns: 240px 1fr; gap: 0; min-height: calc(100vh - 200px); }
+  .sidebar { border-right: 1px solid var(--border); padding: 1.5rem 1rem; }
+  .sidebar-title { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem; padding: 0 8px; }
+  .folder-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); transition: all 0.15s; margin-bottom: 2px; }
+  .folder-item:hover { background: var(--surface); color: var(--text); }
+  .folder-item.active { background: var(--surface2); color: var(--text); }
+  .folder-name { display: flex; align-items: center; gap: 8px; }
+  .folder-delete { opacity: 0; font-size: 16px; color: var(--muted); background: none; border: none; cursor: pointer; padding: 0 4px; }
+  .folder-item:hover .folder-delete { opacity: 1; }
+  .new-folder { display: flex; gap: 6px; margin-top: 0.75rem; }
+  .new-folder input { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; height: 32px; color: var(--text); font-size: 13px; outline: none; }
+  .new-folder input:focus { border-color: var(--accent); }
+  .new-folder button { height: 32px; width: 32px; border-radius: 8px; background: var(--accent); border: none; color: #0f0f0f; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: 700; }
 
-  /* toolbar */
+  /* content */
+  .content { padding: 1.5rem; }
   .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-  .toolbar input { flex: 1; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 14px; height: 38px; color: var(--text); font-size: 14px; outline: none; }
+  .toolbar input { flex: 1; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 14px; height: 36px; color: var(--text); font-size: 14px; outline: none; }
   .toolbar input:focus { border-color: var(--accent); }
   .tag { font-size: 12px; padding: 4px 12px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); cursor: pointer; background: transparent; transition: all 0.15s; }
   .tag.active { background: var(--accent); color: #0f0f0f; border-color: var(--accent); font-weight: 600; }
-  .btn-sm { height: 38px; padding: 0 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
-  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-  .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
 
   /* table */
   .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
   thead { background: var(--surface2); }
   th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
-  th:nth-child(1) { width: 20%; }
-  th:nth-child(2) { width: 15%; }
-  th:nth-child(3) { width: 14%; }
-  th:nth-child(4) { width: 22%; }
-  th:nth-child(5) { width: 20%; }
+  th:nth-child(1) { width: 18%; }
+  th:nth-child(2) { width: 14%; }
+  th:nth-child(3) { width: 13%; }
+  th:nth-child(4) { width: 20%; }
+  th:nth-child(5) { width: 18%; }
   th:nth-child(6) { width: 9%; }
-  td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+  th:nth-child(7) { width: 8%; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: var(--surface); }
-  .store-name { font-weight: 600; }
-  .empty-state { text-align: center; padding: 4rem 1rem; color: var(--muted); font-size: 14px; }
-  .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.3; }
-
-  /* badges */
   .badge { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px; }
   .badge-wpn { background: #1a3a2a; color: #4ade80; }
   .badge-indie { background: #1a2a3a; color: #60a5fa; }
   .badge-chain { background: #2a2a1a; color: #fbbf24; }
+  .empty-state { text-align: center; padding: 4rem 1rem; color: var(--muted); font-size: 14px; }
+  .save-btn { background: none; border: none; cursor: pointer; color: var(--muted); font-size: 16px; transition: color 0.15s; }
+  .save-btn:hover { color: var(--accent); }
 
   /* progress */
   .progress-bar { height: 3px; background: var(--surface2); border-radius: 2px; margin-bottom: 1.5rem; overflow: hidden; }
@@ -95,205 +130,487 @@
   /* paywall */
   .paywall-overlay { position: relative; }
   .paywall-blur { filter: blur(4px); pointer-events: none; user-select: none; }
-  .paywall-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; text-align: center; width: 360px; max-width: 90vw; z-index: 10; box-shadow: 0 0 80px rgba(200, 241, 53, 0.08); }
+  .paywall-card { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 2.5rem; text-align: center; width: 360px; max-width: 90vw; z-index: 10; box-shadow: 0 0 80px rgba(200,241,53,0.08); }
   .paywall-card h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
   .paywall-card p { color: var(--muted); font-size: 14px; margin-bottom: 1.5rem; line-height: 1.6; }
   .price { font-size: 42px; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
   .price span { font-size: 16px; color: var(--muted); font-weight: 400; }
   .features { list-style: none; text-align: left; margin: 1.25rem 0 1.5rem; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
   .features li::before { content: "✓ "; color: var(--accent); font-weight: 700; }
-  .btn-pay { width: 100%; height: 52px; border-radius: var(--radius); background: var(--accent); color: #0f0f0f; font-size: 16px; font-weight: 700; border: none; cursor: pointer; transition: background 0.15s; }
+  .btn-pay { width: 100%; height: 52px; border-radius: var(--radius); background: var(--accent); color: #0f0f0f; font-size: 16px; font-weight: 700; border: none; cursor: pointer; }
   .btn-pay:hover { background: var(--accent-dark); }
-  .paywall-note { font-size: 11px; color: var(--muted); margin-top: 10px; }
 
-  /* loading spinner */
+  /* profile page */
+  .page { max-width: 600px; margin: 2rem auto; padding: 0 1.5rem; }
+  .page h2 { font-size: 22px; font-weight: 800; margin-bottom: 1.5rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; margin-bottom: 1rem; }
+  .card h3 { font-size: 15px; font-weight: 700; margin-bottom: 1rem; }
+  .avatar-upload { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+  .avatar-lg { width: 64px; height: 64px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: var(--accent); overflow: hidden; }
+  .avatar-lg img { width: 100%; height: 100%; object-fit: cover; }
+  .plan-badge { display: inline-block; background: #1a3a2a; color: #4ade80; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 99px; margin-bottom: 1rem; }
+
   @keyframes spin { to { transform: rotate(360deg); } }
-  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0f0f0f; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -3px; margin-right: 6px; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0f0f0f; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  .spinner-white { border-color: rgba(255,255,255,0.2); border-top-color: white; }
 </style>
 </head>
 <body>
 
+<!-- TOPBAR -->
 <div class="topbar">
   <div class="logo">LGS<span>Finder</span></div>
-  <div class="trial-badge">Free trial: <b id="searchesLeft">3</b> searches left</div>
-</div>
-
-<div class="hero">
-  <h1>Source sealed cases<br><span>direct from LGS owners</span></h1>
-  <p>Skip distributor minimums. Find TCG shop owners willing to sell you wholesale sealed boxes — Magic, Pokémon, Yu-Gi-Oh and more.</p>
-
-  <div class="search-box">
-    <input type="text" id="locationInput" placeholder="City, state or ZIP — e.g. Chicago, IL" />
-    <select id="radiusSelect">
-      <option value="10">10 mi</option>
-      <option value="25" selected>25 mi</option>
-      <option value="50">50 mi</option>
-      <option value="100">100 mi</option>
-    </select>
-    <button class="btn btn-accent" id="searchBtn" onclick="startSearch()">Search</button>
-  </div>
-
-  <div class="stats" id="statsRow" style="display:none">
-    <div class="stat"><div class="stat-val" id="statStores">0</div><div class="stat-label">Stores found</div></div>
-    <div class="stat"><div class="stat-val" id="statEmail">0</div><div class="stat-label">With email</div></div>
-    <div class="stat"><div class="stat-val" id="statPhone">0</div><div class="stat-label">With phone</div></div>
-    <div class="stat"><div class="stat-val" id="statContact">0</div><div class="stat-label">Named contacts</div></div>
+  <div class="topbar-right" id="topbarRight">
+    <button class="btn btn-ghost" style="height:36px;font-size:13px" onclick="showAuth('login')">Log in</button>
+    <button class="btn btn-accent" style="height:36px;font-size:13px" onclick="showAuth('signup')">Sign up free</button>
   </div>
 </div>
 
-<div class="container">
-  <div class="progress-bar" id="progressBar" style="display:none">
-    <div class="progress-fill" id="progressFill" style="width:0%"></div>
-  </div>
-
-  <div id="mainContent">
-    <div class="empty-state">
-      <div class="icon">🗺️</div>
-      <div>Enter a location above to find LGS stores in that area</div>
+<!-- AUTH MODAL -->
+<div class="modal-overlay" id="authModal" style="display:none">
+  <div class="modal">
+    <h2 id="authTitle">Welcome back</h2>
+    <p id="authSubtitle">Log in to access your saved stores and folders.</p>
+    <div class="modal-error" id="authError"></div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="authEmail" placeholder="you@example.com" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="authPassword" placeholder="••••••••" />
+    </div>
+    <div class="form-group" id="nameGroup" style="display:none">
+      <label>Full name</label>
+      <input type="text" id="authName" placeholder="Your name" />
+    </div>
+    <button class="btn btn-accent" style="width:100%;height:44px;font-size:15px;justify-content:center" id="authSubmitBtn" onclick="submitAuth()">Log in</button>
+    <div class="modal-footer">
+      <span id="authToggleText">Don't have an account? </span>
+      <a onclick="toggleAuthMode()" id="authToggleLink">Sign up</a>
+      &nbsp;·&nbsp; <a onclick="closeModal('authModal')">Cancel</a>
     </div>
   </div>
 </div>
 
-<!-- Paywall template (hidden) -->
+<!-- FOLDER SAVE MODAL -->
+<div class="modal-overlay" id="folderModal" style="display:none">
+  <div class="modal">
+    <h2>Save to folder</h2>
+    <p>Choose a folder to save this store to.</p>
+    <div id="folderList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1rem"></div>
+    <button class="btn btn-ghost" style="width:100%;justify-content:center" onclick="closeModal('folderModal')">Cancel</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="appRoot">
+  <!-- HERO + SEARCH -->
+  <div class="hero" id="heroSection">
+    <h1>Source sealed cases<br><span>direct from LGS owners</span></h1>
+    <p>Skip distributor minimums. Find TCG shop owners willing to sell you wholesale sealed boxes — Magic, Pokémon, Yu-Gi-Oh and more.</p>
+    <div class="search-box">
+      <input type="text" id="locationInput" placeholder="City, state or ZIP — e.g. Philadelphia, PA" />
+      <select id="radiusSelect">
+        <option value="10">10 mi</option>
+        <option value="25" selected>25 mi</option>
+        <option value="50">50 mi</option>
+        <option value="100">100 mi</option>
+      </select>
+      <button class="btn btn-accent" id="searchBtn" onclick="startSearch()">Search</button>
+    </div>
+    <div class="stats" id="statsRow" style="display:none">
+      <div class="stat"><div class="stat-val" id="statStores">0</div><div class="stat-label">Stores found</div></div>
+      <div class="stat"><div class="stat-val" id="statEmail">0</div><div class="stat-label">With email</div></div>
+      <div class="stat"><div class="stat-val" id="statPhone">0</div><div class="stat-label">With phone</div></div>
+      <div class="stat"><div class="stat-val" id="statContact">0</div><div class="stat-label">Named contacts</div></div>
+    </div>
+  </div>
+
+  <!-- RESULTS LAYOUT -->
+  <div class="app-layout" id="appLayout" style="display:none">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-title">📁 My Folders</div>
+      <div id="folderSidebar"></div>
+      <div class="new-folder" id="newFolderRow" style="display:none">
+        <input type="text" id="newFolderInput" placeholder="Folder name..." />
+        <button onclick="createFolder()">+</button>
+      </div>
+      <div style="margin-top:1rem">
+        <button class="btn-sm" style="width:100%;justify-content:center" onclick="showSearchView()">+ New Search</button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+      <div class="progress-bar" id="progressBar" style="display:none">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+      <div id="contentArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PROFILE PAGE -->
+<div id="profilePage" style="display:none">
+  <div class="page">
+    <h2>Account settings</h2>
+    <div class="card">
+      <h3>Profile</h3>
+      <div class="avatar-upload">
+        <div class="avatar-lg" id="profileAvatarLg"></div>
+        <div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Profile photo</div>
+          <input type="file" id="avatarFileInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)" />
+          <button class="btn-sm" onclick="document.getElementById('avatarFileInput').click()">Upload photo</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Full name</label>
+        <input type="text" id="profileName" placeholder="Your name" />
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="text" id="profileEmail" disabled style="opacity:0.5" />
+      </div>
+      <button class="btn btn-accent" style="justify-content:center" onclick="saveProfile()">Save changes</button>
+    </div>
+    <div class="card">
+      <h3>Subscription</h3>
+      <div class="plan-badge" id="planBadge">Free Trial</div>
+      <p style="font-size:14px;color:var(--muted);margin-bottom:1rem">Upgrade to unlock unlimited searches, folder storage, and CSV exports.</p>
+      <button class="btn btn-accent" style="justify-content:center" onclick="goToCheckout()">Upgrade to Pro — $29/mo</button>
+    </div>
+    <div class="card">
+      <h3>Danger zone</h3>
+      <button class="btn btn-danger" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+</div>
+
 <template id="paywallTpl">
   <div class="paywall-card">
     <h2>You've used your free searches</h2>
-    <p>Unlock unlimited searches across every city, state, and zip code in the US.</p>
+    <p>Unlock unlimited searches to find LGS owners across every market.</p>
     <div class="price">$29<span>/month</span></div>
     <ul class="features">
       <li>Unlimited location searches</li>
+      <li>Save stores to folders</li>
       <li>Owner & manager names</li>
       <li>Emails, phones & addresses</li>
       <li>CSV export</li>
-      <li>WPN store filtering</li>
     </ul>
     <button class="btn-pay" onclick="goToCheckout()">Get full access →</button>
-    <div class="paywall-note">Billed monthly. Cancel anytime.</div>
   </div>
 </template>
 
 <script>
+// ── Init Supabase ──────────────────────────────────────────
+const SUPABASE_URL = 'https://cazzomaxetxraxjijaon.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenpvbWF4ZXR4cmF4amlqYW9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzQ2MDcsImV4cCI6MjA5NTgxMDYwN30.4bSMPk-euW1v6p6FdxMlD4ZlnQ4vkhj3N7RBSOKBc5w';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const MAX_FREE = 3;
-let searches = parseInt(localStorage.getItem('lgs_searches') || '0');
+let currentUser = null;
 let allResults = [];
 let activeTag = 'all';
-let paid = localStorage.getItem('lgs_paid') === 'true';
+let folders = [];
+let activeFolderId = null;
+let authMode = 'login';
+let pendingSaveStore = null;
+let searches = parseInt(localStorage.getItem('lgs_searches') || '0');
 
-function updateTrialBadge() {
-  const left = Math.max(0, MAX_FREE - searches);
-  document.getElementById('searchesLeft').textContent = paid ? '∞' : left;
-  if (paid) document.querySelector('.trial-badge').innerHTML = '✓ Full access';
+// ── Auth state ─────────────────────────────────────────────
+sb.auth.onAuthStateChange(async (event, session) => {
+  currentUser = session?.user || null;
+  renderTopbar();
+  if (currentUser) {
+    await loadFolders();
+    renderFolderSidebar();
+  }
+});
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  currentUser = session?.user || null;
+  renderTopbar();
+  if (currentUser) {
+    await loadFolders();
+    renderFolderSidebar();
+  }
 }
-updateTrialBadge();
+init();
 
+// ── Topbar ─────────────────────────────────────────────────
+function renderTopbar() {
+  const el = document.getElementById('topbarRight');
+  if (currentUser) {
+    const initials = (currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase();
+    const avatar = currentUser.user_metadata?.avatar_url;
+    el.innerHTML = `
+      <div class="user-menu">
+        <div class="avatar" onclick="toggleDropdown()" id="avatarBtn">
+          ${avatar ? `<img src="${avatar}" />` : initials}
+        </div>
+        <div class="user-dropdown" id="userDropdown">
+          <div style="padding:10px 16px;font-size:12px;color:var(--muted)">${currentUser.email}</div>
+          <div class="divider"></div>
+          <a onclick="showProfile()">Account settings</a>
+          <a onclick="showAppView()">My searches</a>
+          <div class="divider"></div>
+          <button onclick="signOut()">Sign out</button>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <button class="btn btn-ghost" style="height:36px;font-size:13px" onclick="showAuth('login')">Log in</button>
+      <button class="btn btn-accent" style="height:36px;font-size:13px" onclick="showAuth('signup')">Sign up free</button>`;
+  }
+}
+
+function toggleDropdown() {
+  document.getElementById('userDropdown').classList.toggle('open');
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('userDropdown');
+  if (menu && !document.getElementById('avatarBtn')?.contains(e.target)) menu.classList.remove('open');
+});
+
+// ── Auth ───────────────────────────────────────────────────
+function showAuth(mode) {
+  authMode = mode;
+  document.getElementById('authModal').style.display = 'flex';
+  document.getElementById('authError').style.display = 'none';
+  updateAuthModal();
+}
+
+function updateAuthModal() {
+  const isLogin = authMode === 'login';
+  document.getElementById('authTitle').textContent = isLogin ? 'Welcome back' : 'Create your account';
+  document.getElementById('authSubtitle').textContent = isLogin ? 'Log in to access your saved stores and folders.' : 'Start finding LGS owners in minutes.';
+  document.getElementById('authSubmitBtn').textContent = isLogin ? 'Log in' : 'Create account';
+  document.getElementById('nameGroup').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('authToggleText').textContent = isLogin ? "Don't have an account? " : 'Already have an account? ';
+  document.getElementById('authToggleLink').textContent = isLogin ? 'Sign up' : 'Log in';
+}
+
+function toggleAuthMode() {
+  authMode = authMode === 'login' ? 'signup' : 'login';
+  updateAuthModal();
+}
+
+async function submitAuth() {
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const name = document.getElementById('authName').value.trim();
+  const btn = document.getElementById('authSubmitBtn');
+  const errEl = document.getElementById('authError');
+  errEl.style.display = 'none';
+  btn.innerHTML = '<span class="spinner"></span>';
+  btn.disabled = true;
+
+  try {
+    if (authMode === 'signup') {
+      const { error } = await sb.auth.signUp({ email, password, options: { data: { full_name: name } } });
+      if (error) throw error;
+      closeModal('authModal');
+      alert('Check your email to confirm your account, then log in!');
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      closeModal('authModal');
+    }
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+  btn.innerHTML = authMode === 'login' ? 'Log in' : 'Create account';
+  btn.disabled = false;
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  currentUser = null;
+  folders = [];
+  allResults = [];
+  showHeroView();
+  renderTopbar();
+  if (document.getElementById('profilePage').style.display !== 'none') showAppView();
+}
+
+// ── Folders ────────────────────────────────────────────────
+async function loadFolders() {
+  if (!currentUser) return;
+  const { data } = await sb.from('folders').select('*').eq('user_id', currentUser.id).order('created_at');
+  folders = data || [];
+}
+
+function renderFolderSidebar() {
+  const el = document.getElementById('folderSidebar');
+  const newRow = document.getElementById('newFolderRow');
+  if (!currentUser) { el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px">Log in to save folders</div>'; newRow.style.display = 'none'; return; }
+  newRow.style.display = 'flex';
+  if (folders.length === 0) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);padding:8px">No folders yet</div>';
+    return;
+  }
+  el.innerHTML = folders.map(f => `
+    <div class="folder-item ${activeFolderId === f.id ? 'active' : ''}" onclick="openFolder('${f.id}')">
+      <span class="folder-name">📁 ${f.name}</span>
+      <button class="folder-delete" onclick="deleteFolder(event,'${f.id}')">×</button>
+    </div>`).join('');
+}
+
+async function createFolder() {
+  if (!currentUser) { showAuth('signup'); return; }
+  const name = document.getElementById('newFolderInput').value.trim();
+  if (!name) return;
+  const { data } = await sb.from('folders').insert({ user_id: currentUser.id, name }).select().single();
+  folders.push(data);
+  document.getElementById('newFolderInput').value = '';
+  renderFolderSidebar();
+}
+
+async function deleteFolder(e, id) {
+  e.stopPropagation();
+  if (!confirm('Delete this folder and all its saved stores?')) return;
+  await sb.from('stores').delete().eq('folder_id', id);
+  await sb.from('folders').delete().eq('id', id);
+  folders = folders.filter(f => f.id !== id);
+  if (activeFolderId === id) { activeFolderId = null; showSearchView(); }
+  renderFolderSidebar();
+}
+
+async function openFolder(id) {
+  activeFolderId = id;
+  renderFolderSidebar();
+  const folder = folders.find(f => f.id === id);
+  const { data: stores } = await sb.from('stores').select('*').eq('folder_id', id).order('created_at');
+  allResults = stores || [];
+  renderContent(allResults, `📁 ${folder.name}`);
+  updateStats(allResults);
+  document.getElementById('statsRow').style.display = 'flex';
+}
+
+// ── Save store ─────────────────────────────────────────────
+function promptSaveStore(store) {
+  if (!currentUser) { showAuth('signup'); return; }
+  pendingSaveStore = store;
+  const list = document.getElementById('folderList');
+  if (folders.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:var(--muted)">No folders yet — create one in the sidebar first.</div>';
+  } else {
+    list.innerHTML = folders.map(f => `
+      <button class="btn btn-ghost" style="justify-content:flex-start" onclick="saveStoreToFolder('${f.id}')">📁 ${f.name}</button>`).join('');
+  }
+  document.getElementById('folderModal').style.display = 'flex';
+}
+
+async function saveStoreToFolder(folderId) {
+  if (!pendingSaveStore) return;
+  await sb.from('stores').insert({ ...pendingSaveStore, user_id: currentUser.id, folder_id: folderId });
+  closeModal('folderModal');
+  pendingSaveStore = null;
+}
+
+// ── Search ─────────────────────────────────────────────────
 async function startSearch() {
   const loc = document.getElementById('locationInput').value.trim();
   if (!loc) { document.getElementById('locationInput').focus(); return; }
-
-  if (!paid && searches >= MAX_FREE) { showPaywall(); return; }
+  if (!currentUser && searches >= MAX_FREE) { showPaywall(); return; }
 
   const radius = document.getElementById('radiusSelect').value;
   const btn = document.getElementById('searchBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Searching...';
+  btn.innerHTML = '<span class="spinner"></span>';
 
-  showProgress(true);
-  setProgress(15);
-  document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div style="color:#888;font-size:14px">🔍 Searching for stores near ' + loc + '...</div></div>';
+  showAppLayout();
+  activeFolderId = null;
+  renderFolderSidebar();
+  showProgress(true); setProgress(15);
+  document.getElementById('contentArea').innerHTML = `<div class="empty-state">🔍 Searching for stores near ${loc}...</div>`;
 
   try {
     setProgress(40);
-    const res = await fetch('/api/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: loc, radius })
-    });
+    const res = await fetch('/api/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: loc, radius }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Search failed');
-
     setProgress(90);
-    searches++;
-    localStorage.setItem('lgs_searches', searches);
-    updateTrialBadge();
-
-    allResults = [...allResults, ...data.stores];
-    renderAll();
+    if (!currentUser) { searches++; localStorage.setItem('lgs_searches', searches); }
+    allResults = data.stores;
+    renderContent(allResults, `Results for "${loc}"`);
+    updateStats(allResults);
+    document.getElementById('statsRow').style.display = 'flex';
     setProgress(100);
     setTimeout(() => showProgress(false), 600);
   } catch(e) {
-    document.getElementById('mainContent').innerHTML = `<div class="empty-state"><div style="color:#ff4d4d">Error: ${e.message}</div></div>`;
+    document.getElementById('contentArea').innerHTML = `<div class="empty-state" style="color:#ff4d4d">Error: ${e.message}</div>`;
     showProgress(false);
   }
-
   btn.disabled = false;
   btn.innerHTML = 'Search';
 }
 
-function renderAll() {
+// ── Render ─────────────────────────────────────────────────
+function renderContent(data, title = '') {
   const filter = document.querySelector('#filterInput')?.value.toLowerCase() || '';
-  let data = allResults.filter(r => {
+  let filtered = data.filter(r => {
     if (activeTag !== 'all' && r.type !== activeTag) return false;
     if (filter) return Object.values(r).join(' ').toLowerCase().includes(filter);
     return true;
   });
 
-  updateStats(allResults);
-  document.getElementById('statsRow').style.display = 'flex';
-
-  const toolbar = `
-    <div class="toolbar" style="margin-bottom:1rem">
-      <input type="text" id="filterInput" placeholder="Filter results..." oninput="renderAll()" />
-      <button class="tag ${activeTag==='all'?'active':''}" onclick="setTag('all')">All</button>
-      <button class="tag ${activeTag==='wpn'?'active':''}" onclick="setTag('wpn')">WPN</button>
-      <button class="tag ${activeTag==='indie'?'active':''}" onclick="setTag('indie')">Indie</button>
-      <button class="tag ${activeTag==='chain'?'active':''}" onclick="setTag('chain')">Chain</button>
-      <button class="btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
-      <button class="btn-sm" onclick="clearAll()">✕ Clear</button>
-    </div>`;
-
-  const rows = data.map(r => {
-    const badge = r.type === 'wpn' ? '<span class="badge badge-wpn">WPN</span>' :
-                  r.type === 'chain' ? '<span class="badge badge-chain">Chain</span>' :
-                  '<span class="badge badge-indie">Indie</span>';
+  const rows = filtered.map(r => {
+    const badge = r.type === 'wpn' ? '<span class="badge badge-wpn">WPN</span>' : r.type === 'chain' ? '<span class="badge badge-chain">Chain</span>' : '<span class="badge badge-indie">Indie</span>';
     const email = r.email ? `<a href="mailto:${r.email}" style="color:#60a5fa">${r.email}</a>` : '<span style="color:#555">—</span>';
+    const storeData = encodeURIComponent(JSON.stringify(r));
     return `<tr>
-      <td class="store-name" title="${r.name}">${r.name}</td>
-      <td title="${r.owner}">${r.owner || '<span style="color:#555">—</span>'}</td>
+      <td style="font-weight:600" title="${r.name}">${r.name}</td>
+      <td>${r.owner || '<span style="color:#555">—</span>'}</td>
       <td>${r.phone || '<span style="color:#555">—</span>'}</td>
-      <td title="${r.email}">${email}</td>
-      <td style="color:#888" title="${r.address}">${r.address || '—'}</td>
+      <td>${email}</td>
+      <td style="color:#888">${r.address || '—'}</td>
       <td>${badge}</td>
+      <td><button class="save-btn" title="Save to folder" onclick="promptSaveStore(${storeData})">💾</button></td>
     </tr>`;
   }).join('');
 
+  const needsPaywall = !currentUser && searches >= MAX_FREE;
   const tableHtml = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${title} — ${filtered.length} stores</div>
+    <div class="toolbar">
+      <input type="text" id="filterInput" placeholder="Filter results..." oninput="renderContent(allResults,'${title}')" />
+      <button class="tag ${activeTag==='all'?'active':''}" onclick="setTag('all','${title}')">All</button>
+      <button class="tag ${activeTag==='wpn'?'active':''}" onclick="setTag('wpn','${title}')">WPN</button>
+      <button class="tag ${activeTag==='indie'?'active':''}" onclick="setTag('indie','${title}')">Indie</button>
+      <button class="tag ${activeTag==='chain'?'active':''}" onclick="setTag('chain','${title}')">Chain</button>
+      <button class="btn-sm" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
-          <th>Store</th><th>Owner/Manager</th><th>Phone</th><th>Email</th><th>Address</th><th>Type</th>
-        </tr></thead>
-        <tbody>${rows.length ? rows : '<tr><td colspan="6" class="empty-state">No stores match your filter</td></tr>'}</tbody>
+        <thead><tr><th>Store</th><th>Owner</th><th>Phone</th><th>Email</th><th>Address</th><th>Type</th><th>Save</th></tr></thead>
+        <tbody>${rows.length ? rows : '<tr><td colspan="7" class="empty-state">No results match your filter</td></tr>'}</tbody>
       </table>
     </div>`;
 
-  const needsPaywall = !paid && searches >= MAX_FREE;
   if (needsPaywall) {
     const tpl = document.getElementById('paywallTpl').content.cloneNode(true);
     const wrapper = document.createElement('div');
     wrapper.className = 'paywall-overlay';
     const blurred = document.createElement('div');
     blurred.className = 'paywall-blur';
-    blurred.innerHTML = toolbar + tableHtml;
+    blurred.innerHTML = tableHtml;
     wrapper.appendChild(blurred);
     wrapper.appendChild(tpl);
-    document.getElementById('mainContent').innerHTML = '';
-    document.getElementById('mainContent').appendChild(wrapper);
+    document.getElementById('contentArea').innerHTML = '';
+    document.getElementById('contentArea').appendChild(wrapper);
   } else {
-    document.getElementById('mainContent').innerHTML = toolbar + tableHtml;
+    document.getElementById('contentArea').innerHTML = tableHtml;
   }
 }
 
-function setTag(tag) { activeTag = tag; renderAll(); }
+function setTag(tag, title) { activeTag = tag; renderContent(allResults, title); }
 
 function updateStats(data) {
   document.getElementById('statStores').textContent = data.length;
@@ -303,39 +620,86 @@ function updateStats(data) {
 }
 
 function exportCSV() {
-  const headers = ['Store Name','Owner/Manager','Phone','Email','Address','Type'];
+  const headers = ['Store','Owner','Phone','Email','Address','Type'];
   const rows = allResults.map(r => [r.name,r.owner,r.phone,r.email,r.address,r.type].map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(','));
-  const csv = [headers.join(','),...rows].join('\n');
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.href = URL.createObjectURL(new Blob([[headers.join(','),...rows].join('\n')],{type:'text/csv'}));
   a.download = 'lgs_contacts.csv'; a.click();
 }
 
-function clearAll() {
+// ── Profile ────────────────────────────────────────────────
+async function showProfile() {
+  document.getElementById('appRoot').style.display = 'none';
+  document.getElementById('profilePage').style.display = 'block';
+  document.getElementById('userDropdown').classList.remove('open');
+  if (!currentUser) return;
+  document.getElementById('profileEmail').value = currentUser.email;
+  document.getElementById('profileName').value = currentUser.user_metadata?.full_name || '';
+  const avatarEl = document.getElementById('profileAvatarLg');
+  const avatar = currentUser.user_metadata?.avatar_url;
+  avatarEl.innerHTML = avatar ? `<img src="${avatar}" />` : (currentUser.email||'U')[0].toUpperCase();
+}
+
+async function saveProfile() {
+  const name = document.getElementById('profileName').value.trim();
+  await sb.auth.updateUser({ data: { full_name: name } });
+  renderTopbar();
+  alert('Profile saved!');
+}
+
+async function uploadAvatar(input) {
+  const file = input.files[0];
+  if (!file || !currentUser) return;
+  const ext = file.name.split('.').pop();
+  const path = `${currentUser.id}/avatar.${ext}`;
+  const { error } = await sb.storage.from('avatars').upload(path, file, { upsert: true });
+  if (error) { alert('Upload failed: ' + error.message); return; }
+  const { data: { publicUrl } } = sb.storage.from('avatars').getPublicUrl(path);
+  await sb.auth.updateUser({ data: { avatar_url: publicUrl } });
+  renderTopbar();
+  showProfile();
+}
+
+// ── View helpers ───────────────────────────────────────────
+function showHeroView() {
+  document.getElementById('heroSection').style.display = 'block';
+  document.getElementById('appLayout').style.display = 'none';
+}
+
+function showAppLayout() {
+  document.getElementById('heroSection').style.display = 'block';
+  document.getElementById('appLayout').style.display = 'grid';
+}
+
+function showSearchView() {
+  activeFolderId = null;
   allResults = [];
-  activeTag = 'all';
+  renderFolderSidebar();
+  document.getElementById('contentArea').innerHTML = '<div class="empty-state">Enter a location above and click Search</div>';
   document.getElementById('statsRow').style.display = 'none';
-  document.getElementById('mainContent').innerHTML = '<div class="empty-state"><div class="icon">🗺️</div><div>Enter a location above to find LGS stores</div></div>';
+  window.scrollTo(0, 0);
+}
+
+function showAppView() {
+  document.getElementById('appRoot').style.display = 'block';
+  document.getElementById('profilePage').style.display = 'none';
 }
 
 function showPaywall() {
   const tpl = document.getElementById('paywallTpl').content.cloneNode(true);
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:100';
   overlay.appendChild(tpl);
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
 }
 
-function goToCheckout() {
-  // Replace this URL with your real Stripe payment link
-  window.location.href = 'https://buy.stripe.com/YOUR_STRIPE_LINK_HERE';
-}
-
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 function showProgress(show) { document.getElementById('progressBar').style.display = show ? 'block' : 'none'; }
 function setProgress(pct) { document.getElementById('progressFill').style.width = pct + '%'; }
+function goToCheckout() { window.location.href = 'https://buy.stripe.com/YOUR_STRIPE_LINK_HERE'; }
 
-document.getElementById('locationInput').addEventListener('keydown', e => { if(e.key==='Enter') startSearch(); });
+document.getElementById('locationInput')?.addEventListener('keydown', e => { if(e.key==='Enter') startSearch(); });
 </script>
 </body>
 </html>
