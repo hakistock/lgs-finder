@@ -1,8 +1,23 @@
+import { createClient } from '@supabase/supabase-js';
+
+const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { location, radius } = req.body;
+  const { location, radius, userId } = req.body;
   if (!location) return res.status(400).json({ error: 'Location is required' });
+
+  // Check + enforce search limits for non-paid users
+  if (userId) {
+    const { data: profile } = await sb.from('profiles').select('paid, searches_used').eq('id', userId).single();
+    
+    if (profile && !profile.paid) {
+      if ((profile.searches_used || 0) >= 1) {
+        return res.status(403).json({ error: 'out_of_credits' });
+      }
+    }
+  }
 
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -26,7 +41,7 @@ For each store extract:
 - Store name
 - Owner or manager name (if findable)
 - Phone number
-- Email address  
+- Email address
 - Full address
 - Type: "wpn" (Wizards Play Network member), "chain" (e.g. GameStop), or "indie" (independent)
 
@@ -45,6 +60,14 @@ Return ONLY a JSON array. No markdown, no backticks, no explanation. Keys: name,
     if (start === -1) throw new Error('No results found for that location.');
 
     const stores = JSON.parse(clean.slice(start, end + 1));
+
+    // Increment searches_used in Supabase
+    if (userId) {
+      const { data: profile } = await sb.from('profiles').select('searches_used').eq('id', userId).single();
+      const current = profile?.searches_used || 0;
+      await sb.from('profiles').upsert({ id: userId, searches_used: current + 1 });
+    }
+
     res.status(200).json({ stores });
   } catch (err) {
     res.status(500).json({ error: err.message });
