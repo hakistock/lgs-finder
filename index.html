@@ -474,17 +474,21 @@ async function submitAuth() {
 }
 
 async function signOut() {
-  document.getElementById('userDropdown').classList.remove('open');
+  const dropdown = document.getElementById('userDropdown');
+  if (dropdown) dropdown.classList.remove('open');
   await sb.auth.signOut();
   currentUser = null;
   folders = [];
   allResults = [];
+  searches = 0;
+  localStorage.removeItem('lgs_searches');
   document.getElementById('appRoot').style.display = 'block';
   document.getElementById('profilePage').style.display = 'none';
   document.getElementById('appLayout').style.display = 'none';
   document.getElementById('heroSection').style.display = 'block';
   document.getElementById('statsRow').style.display = 'none';
   renderTopbar();
+  window.location.reload();
 }
 
 // ── Folders ────────────────────────────────────────────────
