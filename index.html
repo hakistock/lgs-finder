@@ -367,8 +367,9 @@ init();
 
 async function loadUserProfile() {
   if (!currentUser) return;
-  const { data } = await sb.from('profiles').select('paid').eq('id', currentUser.id).single();
+  const { data } = await sb.from('profiles').select('paid, searches_used').eq('id', currentUser.id).single();
   currentUser.isPaid = data?.paid || false;
+  currentUser.searchesUsed = data?.searches_used || 0;
   const badge = document.getElementById('planBadge');
   if (badge) badge.textContent = currentUser.isPaid ? 'Pro' : 'Free Trial';
 }
@@ -380,11 +381,13 @@ function renderTopbar() {
     const initials = (currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase();
     const avatar = currentUser.user_metadata?.avatar_url;
 const isPaid = currentUser.isPaid;
+const searchesUsed = currentUser.searchesUsed || 0;
+  const creditsLeft = Math.max(0, MAX_FREE - searchesUsed);
   const creditsLabel = isPaid
     ? '<span style="font-size:12px;background:#1a3a2a;color:#4ade80;padding:3px 10px;border-radius:99px;font-weight:600">✦ Pro — Unlimited</span>'
-    : (searches >= MAX_FREE
+    : (creditsLeft <= 0
         ? '<span style="font-size:12px;background:#3a1a1a;color:#ff4d4d;padding:3px 10px;border-radius:99px;font-weight:600">Credits: 0</span>'
-        : '<span style="font-size:12px;background:var(--surface2);color:var(--muted);padding:3px 10px;border-radius:99px;font-weight:600">Credits: 1</span>');
+        : `<span style="font-size:12px;background:var(--surface2);color:var(--muted);padding:3px 10px;border-radius:99px;font-weight:600">Credits: ${creditsLeft}</span>`);
 
   el.innerHTML = `
       <div style="display:flex;align-items:center;gap:10px">
