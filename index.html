@@ -368,6 +368,7 @@ init();
 async function loadUserProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('paid, searches_used').eq('id', currentUser.id).single();
+  console.log('Profile data:', data);
   currentUser.isPaid = data?.paid || false;
   currentUser.searchesUsed = data?.searches_used || 0;
   const badge = document.getElementById('planBadge');
