@@ -430,13 +430,17 @@ async function submitAuth() {
 }
 
 async function signOut() {
+  document.getElementById('userDropdown').classList.remove('open');
   await sb.auth.signOut();
   currentUser = null;
   folders = [];
   allResults = [];
-  showHeroView();
+  document.getElementById('appRoot').style.display = 'block';
+  document.getElementById('profilePage').style.display = 'none';
+  document.getElementById('appLayout').style.display = 'none';
+  document.getElementById('heroSection').style.display = 'block';
+  document.getElementById('statsRow').style.display = 'none';
   renderTopbar();
-  if (document.getElementById('profilePage').style.display !== 'none') showAppView();
 }
 
 // ── Folders ────────────────────────────────────────────────
