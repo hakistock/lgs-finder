@@ -356,8 +356,8 @@ function renderTopbar() {
         <div class="user-dropdown" id="userDropdown">
           <div style="padding:10px 16px;font-size:12px;color:var(--muted)">${currentUser.email}</div>
           <div class="divider"></div>
+          <a onclick="showAppView()">Home</a>
           <a onclick="showProfile()">Account settings</a>
-          <a onclick="showAppView()">My searches</a>
           <div class="divider"></div>
           <button onclick="signOut()">Sign out</button>
         </div>
