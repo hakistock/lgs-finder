@@ -588,8 +588,15 @@ const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Search failed');
     setProgress(90);
     if (!currentUser) { searches++; localStorage.setItem('lgs_searches', searches); }
-      if (currentUser) { await loadUserProfile(); renderTopbar(); }
-    allResults = data.stores;
+      if (currentUser) { 
+  await loadUserProfile(); 
+  await renderTopbar(); 
+}
+allResults = data.stores;
+    if (currentUser) {
+      await loadUserProfile();
+      renderTopbar();
+    }
     renderContent(allResults, `Results for "${loc}"`);
     updateStats(allResults);
     document.getElementById('statsRow').style.display = 'flex';
