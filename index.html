@@ -337,11 +337,20 @@ async function init() {
   currentUser = session?.user || null;
   renderTopbar();
   if (currentUser) {
+    await loadUserProfile();
     await loadFolders();
     renderFolderSidebar();
   }
 }
 init();
+
+async function loadUserProfile() {
+  if (!currentUser) return;
+  const { data } = await sb.from('profiles').select('paid').eq('id', currentUser.id).single();
+  currentUser.isPaid = data?.paid || false;
+  const badge = document.getElementById('planBadge');
+  if (badge) badge.textContent = currentUser.isPaid ? 'Pro' : 'Free Trial';
+}
 
 // ── Topbar ─────────────────────────────────────────────────
 function renderTopbar() {
@@ -524,6 +533,7 @@ async function startSearch() {
   const loc = document.getElementById('locationInput').value.trim();
   if (!loc) { document.getElementById('locationInput').focus(); return; }
   if (!currentUser && searches >= MAX_FREE) { showPaywall(); return; }
+  if (currentUser && !currentUser.isPaid && searches >= MAX_FREE) { showPaywall(); return; }
 
   const radius = document.getElementById('radiusSelect').value;
   const btn = document.getElementById('searchBtn');
@@ -581,7 +591,7 @@ function renderContent(data, title = '') {
     </tr>`;
   }).join('');
 
-  const needsPaywall = !currentUser && searches >= MAX_FREE;
+  const needsPaywall = (!currentUser || (currentUser && !currentUser.isPaid)) && searches >= MAX_FREE;
   const tableHtml = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${title} — ${filtered.length} stores</div>
     <div class="toolbar">
