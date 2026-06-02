@@ -345,6 +345,9 @@ async function loadUserData() {
   bootstrapped = true;
   await ensureProfile();
   await loadUserProfile();
+  // Re-render now that the real searches_used/paid values are loaded — the first
+  // render ran before this data existed and showed a stale credit count.
+  renderTopbar();
   await loadFolders();
   renderFolderSidebar();
 }
