@@ -324,6 +324,12 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 
 const MAX_FREE = 1;
 let currentUser = null;
+// Profile fields kept in their own module state, NOT on the currentUser object.
+// Supabase replaces currentUser with a bare user (no profile fields) on every
+// auth event — including the TOKEN_REFRESHED/SIGNED_IN it fires when a tab
+// regains focus — which used to reset the credit count to its default.
+let userIsPaid = false;
+let userSearchesUsed = 0;
 let allResults = [];
 let activeTag = 'all';
 let folders = [];
@@ -364,6 +370,8 @@ sb.auth.onAuthStateChange((event, session) => {
     setTimeout(loadUserData, 0);
   } else {
     bootstrapped = false;
+    userIsPaid = false;
+    userSearchesUsed = 0;
   }
 });
 
@@ -397,6 +405,7 @@ window.addEventListener('storage', async (e) => {
   if (currentUser) {
     loadUserData();
   } else {
+    userIsPaid = false; userSearchesUsed = 0;
     folders = []; allResults = []; activeFolderId = null;
     renderFolderSidebar();
     showAppView();
@@ -425,11 +434,10 @@ window.addEventListener('storage', async (e) => {
 async function loadUserProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('paid, searches_used').eq('id', currentUser.id).single();
-  console.log('Profile data:', data);
-  currentUser.isPaid = data?.paid || false;
-  currentUser.searchesUsed = data?.searches_used || 0;
+  userIsPaid = data?.paid || false;
+  userSearchesUsed = data?.searches_used || 0;
   const badge = document.getElementById('planBadge');
-  if (badge) badge.textContent = currentUser.isPaid ? 'Pro' : 'Free Trial';
+  if (badge) badge.textContent = userIsPaid ? 'Pro' : 'Free Trial';
 }
 
 // ── Topbar ─────────────────────────────────────────────────
@@ -438,8 +446,8 @@ function renderTopbar() {
   if (currentUser) {
     const initials = (currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase();
     const avatar = currentUser.user_metadata?.avatar_url;
-const isPaid = currentUser.isPaid;
-const searchesUsed = currentUser.searchesUsed || 0;
+const isPaid = userIsPaid;
+const searchesUsed = userSearchesUsed || 0;
   const creditsLeft = Math.max(0, MAX_FREE - searchesUsed);
   const creditsLabel = isPaid
     ? '<span style="font-size:12px;background:#1a3a2a;color:#4ade80;padding:3px 10px;border-radius:99px;font-weight:600">✦ Pro — Unlimited</span>'
@@ -538,6 +546,8 @@ function signOut() {
   sb.auth.signOut({ scope: 'local' }).catch(e => console.error('Sign out error:', e));
 
   currentUser = null;
+  userIsPaid = false;
+  userSearchesUsed = 0;
   folders = [];
   allResults = [];
   activeFolderId = null;
@@ -628,7 +638,7 @@ async function startSearch() {
   const loc = document.getElementById('locationInput').value.trim();
   if (!loc) { document.getElementById('locationInput').focus(); return; }
   if (!currentUser && searches >= MAX_FREE) { showPaywall(); return; }
-  if (currentUser && !currentUser.isPaid && searches >= MAX_FREE) { showPaywall(); return; }
+  if (currentUser && !userIsPaid && searches >= MAX_FREE) { showPaywall(); return; }
 
   const radius = document.getElementById('radiusSelect').value;
   const btn = document.getElementById('searchBtn');
@@ -699,7 +709,7 @@ function renderContent(data, title = '') {
     </tr>`;
   }).join('');
 
-  const needsPaywall = (!currentUser || (currentUser && !currentUser.isPaid)) && searches >= MAX_FREE;
+  const needsPaywall = (!currentUser || (currentUser && !userIsPaid)) && searches >= MAX_FREE;
   const tableHtml = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${title} — ${filtered.length} stores</div>
     <div class="toolbar">
