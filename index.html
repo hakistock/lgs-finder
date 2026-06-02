@@ -310,10 +310,26 @@
 // ── Init Supabase ──────────────────────────────────────────
 const SUPABASE_URL = 'https://cazzomaxetxraxjijaon.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenpvbWF4ZXR4cmF4amlqYW9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzQ2MDcsImV4cCI6MjA5NTgxMDYwN30.4bSMPk-euW1v6p6FdxMlD4ZlnQ4vkhj3N7RBSOKBc5w';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Explicitly pin session persistence to localStorage so a refresh keeps the
+// user logged in. These are the supabase-js defaults, but being explicit guards
+// against any environment where the default storage isn't picked up.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: window.localStorage,
+    storageKey: 'sb-cazzomaxetxraxjijaon-auth-token',
+  }
+});
 
 const MAX_FREE = 1;
 let currentUser = null;
+// Profile fields kept in their own module state, NOT on the currentUser object.
+// Supabase replaces currentUser with a bare user (no profile fields) on every
+// auth event — including the TOKEN_REFRESHED/SIGNED_IN it fires when a tab
+// regains focus — which used to reset the credit count to its default.
+let userIsPaid = false;
+let userSearchesUsed = 0;
 let allResults = [];
 let activeTag = 'all';
 let folders = [];
@@ -323,29 +339,79 @@ let pendingSaveStore = null;
 let searches = parseInt(localStorage.getItem('lgs_searches') || '0');
 
 // ── Auth state ─────────────────────────────────────────────
-sb.auth.onAuthStateChange(async (event, session) => {
+// Single guarded bootstrap. Loading the profile/folders from BOTH init() and
+// the auth callback previously fired several authenticated requests at page
+// load simultaneously. That raced Supabase's refresh-token rotation (two
+// requests refreshing with the same token -> the 2nd is rejected as "already
+// used"), which made supabase-js clear the session and silently sign the user
+// out on every reload. Running it exactly once fixes that.
+let bootstrapped = false;
+async function loadUserData() {
+  if (!currentUser || bootstrapped) return;
+  bootstrapped = true;
+  await ensureProfile();
+  await loadUserProfile();
+  // Re-render now that the real searches_used/paid values are loaded — the first
+  // render ran before this data existed and showed a stale credit count.
+  renderTopbar();
+  await loadFolders();
+  renderFolderSidebar();
+}
+
+// onAuthStateChange fires INITIAL_SESSION on load (restoring the persisted
+// session), plus SIGNED_IN / SIGNED_OUT. It is the single source of truth for
+// auth state — there is no separate getSession() call to double up the work.
+sb.auth.onAuthStateChange((event, session) => {
   currentUser = session?.user || null;
   renderTopbar();
   if (currentUser) {
-    await ensureProfile();
-    await loadUserProfile();
-    await loadFolders();
-    renderFolderSidebar();
+    // Defer out of the callback to avoid deadlocking GoTrue's internal lock,
+    // which would leave signInWithPassword() pending (sign-in spinner hangs).
+    setTimeout(loadUserData, 0);
+  } else {
+    bootstrapped = false;
+    userIsPaid = false;
+    userSearchesUsed = 0;
   }
 });
 
-async function init() {
+// Belt-and-suspenders: explicitly restore the persisted session on load. If
+// INITIAL_SESSION doesn't fire (or fires before this listener is attached), this
+// still rehydrates the UI. loadUserData() is guarded so it never double-loads.
+(async () => {
   const { data: { session } } = await sb.auth.getSession();
-  currentUser = session?.user || null;
-  if (currentUser) {
-    await ensureProfile();
-    await loadUserProfile();
-    await loadFolders();
-    renderFolderSidebar();
+  if (session?.user) {
+    currentUser = session.user;
+    renderTopbar();
+    loadUserData();
   }
+})();
+
+// Cross-tab sync. With the app open in multiple tabs, all clients share this one
+// localStorage key. When another tab signs in/out or rotates the refresh token,
+// it writes here and fires a 'storage' event. We re-read the session so this tab
+// stays on the *current* token instead of acting on a stale in-memory one (which
+// is what made a refreshed tab clobber the shared session and log every tab out).
+const AUTH_STORAGE_KEY = 'sb-cazzomaxetxraxjijaon-auth-token';
+window.addEventListener('storage', async (e) => {
+  if (e.key !== AUTH_STORAGE_KEY) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const newUser = session?.user || null;
+  // Ignore plain token rotations for the same user — only react to login/logout.
+  if ((newUser?.id || null) === (currentUser?.id || null)) return;
+  currentUser = newUser;
+  bootstrapped = false;
   renderTopbar();
-}
-init();
+  if (currentUser) {
+    loadUserData();
+  } else {
+    userIsPaid = false; userSearchesUsed = 0;
+    folders = []; allResults = []; activeFolderId = null;
+    renderFolderSidebar();
+    showAppView();
+    showHeroView();
+  }
+});
   async function ensureProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('id').eq('id', currentUser.id).single();
@@ -368,11 +434,10 @@ init();
 async function loadUserProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('paid, searches_used').eq('id', currentUser.id).single();
-  console.log('Profile data:', data);
-  currentUser.isPaid = data?.paid || false;
-  currentUser.searchesUsed = data?.searches_used || 0;
+  userIsPaid = data?.paid || false;
+  userSearchesUsed = data?.searches_used || 0;
   const badge = document.getElementById('planBadge');
-  if (badge) badge.textContent = currentUser.isPaid ? 'Pro' : 'Free Trial';
+  if (badge) badge.textContent = userIsPaid ? 'Pro' : 'Free Trial';
 }
 
 // ── Topbar ─────────────────────────────────────────────────
@@ -381,8 +446,8 @@ function renderTopbar() {
   if (currentUser) {
     const initials = (currentUser.user_metadata?.full_name || currentUser.email || 'U')[0].toUpperCase();
     const avatar = currentUser.user_metadata?.avatar_url;
-const isPaid = currentUser.isPaid;
-const searchesUsed = currentUser.searchesUsed || 0;
+const isPaid = userIsPaid;
+const searchesUsed = userSearchesUsed || 0;
   const creditsLeft = Math.max(0, MAX_FREE - searchesUsed);
   const creditsLabel = isPaid
     ? '<span style="font-size:12px;background:#1a3a2a;color:#4ade80;padding:3px 10px;border-radius:99px;font-weight:600">✦ Pro — Unlimited</span>'
@@ -474,9 +539,23 @@ async function submitAuth() {
   btn.disabled = false;
 }
 
-async function signOut() {
-  await sb.auth.signOut();
-  window.location.href = window.location.href;
+function signOut() {
+  // Fire the sign-out (scope:'local' clears local storage without a server
+  // round-trip) but don't wait on it — update the UI immediately so we never
+  // depend on the network or a page reload to reflect the signed-out state.
+  sb.auth.signOut({ scope: 'local' }).catch(e => console.error('Sign out error:', e));
+
+  currentUser = null;
+  userIsPaid = false;
+  userSearchesUsed = 0;
+  folders = [];
+  allResults = [];
+  activeFolderId = null;
+  document.getElementById('userDropdown')?.classList.remove('open');
+  showAppView();
+  showHeroView();
+  renderTopbar();
+  renderFolderSidebar();
 }
 
 // ── Folders ────────────────────────────────────────────────
@@ -559,7 +638,7 @@ async function startSearch() {
   const loc = document.getElementById('locationInput').value.trim();
   if (!loc) { document.getElementById('locationInput').focus(); return; }
   if (!currentUser && searches >= MAX_FREE) { showPaywall(); return; }
-  if (currentUser && !currentUser.isPaid && searches >= MAX_FREE) { showPaywall(); return; }
+  if (currentUser && !userIsPaid && searches >= MAX_FREE) { showPaywall(); return; }
 
   const radius = document.getElementById('radiusSelect').value;
   const btn = document.getElementById('searchBtn');
@@ -630,7 +709,7 @@ function renderContent(data, title = '') {
     </tr>`;
   }).join('');
 
-  const needsPaywall = (!currentUser || (currentUser && !currentUser.isPaid)) && searches >= MAX_FREE;
+  const needsPaywall = (!currentUser || (currentUser && !userIsPaid)) && searches >= MAX_FREE;
   const tableHtml = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:1rem">${title} — ${filtered.length} stores</div>
     <div class="toolbar">
