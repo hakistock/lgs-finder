@@ -375,6 +375,31 @@ sb.auth.onAuthStateChange((event, session) => {
     loadUserData();
   }
 })();
+
+// Cross-tab sync. With the app open in multiple tabs, all clients share this one
+// localStorage key. When another tab signs in/out or rotates the refresh token,
+// it writes here and fires a 'storage' event. We re-read the session so this tab
+// stays on the *current* token instead of acting on a stale in-memory one (which
+// is what made a refreshed tab clobber the shared session and log every tab out).
+const AUTH_STORAGE_KEY = 'sb-cazzomaxetxraxjijaon-auth-token';
+window.addEventListener('storage', async (e) => {
+  if (e.key !== AUTH_STORAGE_KEY) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const newUser = session?.user || null;
+  // Ignore plain token rotations for the same user — only react to login/logout.
+  if ((newUser?.id || null) === (currentUser?.id || null)) return;
+  currentUser = newUser;
+  bootstrapped = false;
+  renderTopbar();
+  if (currentUser) {
+    loadUserData();
+  } else {
+    folders = []; allResults = []; activeFolderId = null;
+    renderFolderSidebar();
+    showAppView();
+    showHeroView();
+  }
+});
   async function ensureProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('id').eq('id', currentUser.id).single();
