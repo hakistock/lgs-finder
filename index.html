@@ -310,7 +310,17 @@
 // ── Init Supabase ──────────────────────────────────────────
 const SUPABASE_URL = 'https://cazzomaxetxraxjijaon.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhenpvbWF4ZXR4cmF4amlqYW9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzQ2MDcsImV4cCI6MjA5NTgxMDYwN30.4bSMPk-euW1v6p6FdxMlD4ZlnQ4vkhj3N7RBSOKBc5w';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Explicitly pin session persistence to localStorage so a refresh keeps the
+// user logged in. These are the supabase-js defaults, but being explicit guards
+// against any environment where the default storage isn't picked up.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    storage: window.localStorage,
+    storageKey: 'sb-cazzomaxetxraxjijaon-auth-token',
+  }
+});
 
 const MAX_FREE = 1;
 let currentUser = null;
@@ -353,6 +363,18 @@ sb.auth.onAuthStateChange((event, session) => {
     bootstrapped = false;
   }
 });
+
+// Belt-and-suspenders: explicitly restore the persisted session on load. If
+// INITIAL_SESSION doesn't fire (or fires before this listener is attached), this
+// still rehydrates the UI. loadUserData() is guarded so it never double-loads.
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session?.user) {
+    currentUser = session.user;
+    renderTopbar();
+    loadUserData();
+  }
+})();
   async function ensureProfile() {
   if (!currentUser) return;
   const { data } = await sb.from('profiles').select('id').eq('id', currentUser.id).single();
