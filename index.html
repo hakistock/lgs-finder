@@ -476,7 +476,7 @@ async function submitAuth() {
 
 async function signOut() {
   await sb.auth.signOut();
-  window.location.href = window.location.href;
+  window.location.reload();
 }
 
 // ── Folders ────────────────────────────────────────────────
